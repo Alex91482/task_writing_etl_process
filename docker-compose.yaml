@@ -57,6 +57,7 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
+#      - ./init_buckets.sh:/docker-entrypoint-initdb.d/init_buckets.sh
       - minio-data:/var/lib/minio/data/
     environment:
       - MINIO_ROOT_USER=admin
@@ -131,9 +132,10 @@ services:
     <<: *airflow-common
     command: celery worker
     healthcheck:
-      test:
-        - "CMD-SHELL"
-        - 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      test: [
+        "CMD-SHELL",
+        'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}" || celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      ]
       interval: 30s
       timeout: 10s
       retries: 5

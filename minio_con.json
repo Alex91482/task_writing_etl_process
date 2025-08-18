@@ -1,0 +1,6 @@
+{
+  "host": "localhost",
+  "port": 9000,
+  "login": "admin",
+  "password": "your_strong_password"
+}
