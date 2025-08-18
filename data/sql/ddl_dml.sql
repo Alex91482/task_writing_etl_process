@@ -912,3 +912,14 @@ create table bank.transactions(
 	oper_result varchar(256),
 	terminal varchar(256)
 );
+/*
+create table bank.rep_fraud(
+	id 
+	event_dt 
+	passport 
+	fio
+	phone
+	event_type 
+	report_dt 
+);
+*/
