@@ -1,14 +1,16 @@
+import json
+import io
+import logging
+
+import pandas as pd
+
+from airflow.providers.standard.operators.python import PythonOperator
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.models import Variable
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
 from airflow.exceptions import AirflowException
-
-import json
-import logging
-
-from airflow.providers.standard.operators.python import PythonOperator
 
 MINIO_CONN_ID = "minio_config"
 FILE_PATTERN = "*.xlsx"
@@ -38,34 +40,31 @@ def config_loader():
         raise AirflowException(f"Failed to load MinIO config: {str(e)}")
 
 
-def process_file(file_key: str):
+def process_file():
     """
-    Функция для обработки файла
-    :param file_key:
+    Функция для обработки файлов
     """
     try:
-        #minio_hook = S3Hook(conn_id=MINIO_CONN_ID, endpoint_url='http://minio:9000')
-        #files = minio_hook.list_keys(bucket_name=BUCKET_NAME)
+        minio_hook = S3Hook(aws_conn_id=MINIO_CONN_ID)
+        files = minio_hook.list_keys(bucket_name=BUCKET_NAME)
 
+        if not files:
+            logging.info(f"No files found in {BUCKET_NAME} bucket.")
+            return
 
-        logging.info(f"Processing file: {file_key}")
-        #logging.info(f"File size: {stat.size} bytes")
-        #logging.info(f"Last modified: {stat.last_modified}")
+        xlsx_files =  [f for f in files if f.endswith(".xlsx")]
+        for xlsx_file in xlsx_files:
+            logging.info(f"Processing {xlsx_file}")
+            obj = minio_hook.get_key(bucket_name=BUCKET_NAME, key=xlsx_file)
+            file_bytes = obj.get()["Body"].read()
+
+            df = pd.read_excel(io.BytesIO(file_bytes))
+
+            for i, row in df.head().iterrows():
+                logging.info(f"Row {i}: {dict(row)}")
 
     except Exception as e:
-        logging.error(f"Error processing file {file_key}: {str(e)}")
         raise AirflowException(f"File processing failed: {str(e)}")
-
-
-def get_latest_file(context):
-    """
-    Получает ключ последнего файла, вызвавшего срабатывание сенсора
-    """
-    ti = context['ti']
-    s3_keys = ti.xcom_pull(key='s3_keys', task_ids='check_for_new_files')
-    if s3_keys:
-        return s3_keys[0]  # Берем первый подходящий файл
-    return None
 
 
 with DAG(
@@ -89,10 +88,7 @@ with DAG(
 
     process_new_file = PythonOperator(
         task_id='process_file',
-        python_callable=process_file,
-        op_kwargs={
-            'file_key': "{{ ti.xcom_pull(task_ids='check_for_new_files') }}"
-        }
+        python_callable=process_file
     )
 
     check_for_new_files >> process_new_file
