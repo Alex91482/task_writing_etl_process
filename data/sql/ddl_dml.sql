@@ -900,8 +900,14 @@ create table bank.terminals(
 );
 
 create table bank.passport_blacklist(
-	passport_num varchar(256)
+    id BIGSERIAL PRIMARY KEY,
+	passport_num varchar(256) NOT NULL,
+    received_dt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    effective_from TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    effective_to TIMESTAMP NOT NULL DEFAULT '9999-12-31 23:59:59',
+    deleted_flg BOOLEAN NOT NULL DEFAULT FALSE
 );
+create index idx_passport_blacklist_passport on bank.passport_blacklist (passport_num);
 
 create table bank.transactions(
 	trans_id varchar(256),

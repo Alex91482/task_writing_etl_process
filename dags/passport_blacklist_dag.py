@@ -15,6 +15,7 @@ from airflow.exceptions import AirflowException
 MINIO_CONN_ID = "minio_config"
 FILE_PATTERN = "*.xlsx"
 BUCKET_NAME = "passport-blacklist"
+BUCKET_ARCHIVE = "passport-blacklist-archive"
 
 default_args = {
     'owner': 'airflow',
@@ -40,6 +41,15 @@ def config_loader():
         raise AirflowException(f"Failed to load MinIO config: {str(e)}")
 
 
+def save_to_postgres(df: pd.DataFrame):
+    """
+    Метод отвечающий за сохранение данных в postgres
+    :param df: фрейм данных с паспортами
+    """
+    for i, row in df.head().iterrows():
+        logging.info(f"Row {i}: {dict(row)}")
+
+
 def process_file():
     """
     Функция для обработки файлов
@@ -60,8 +70,26 @@ def process_file():
 
             df = pd.read_excel(io.BytesIO(file_bytes))
 
-            for i, row in df.head().iterrows():
-                logging.info(f"Row {i}: {dict(row)}")
+            save_to_postgres(df=df)
+
+            xlsx_file_name_archive = f"{xlsx_file}.archive"
+            # Копируем файл в новый бакет с новым именем
+            minio_hook.copy_object(
+                source_bucket_key=xlsx_file,
+                source_bucket_name=BUCKET_NAME,
+                dest_bucket_key=xlsx_file_name_archive,
+                dest_bucket_name=BUCKET_ARCHIVE
+            )
+
+            logging.info("File copied successfully")
+
+            # Удаляем исходный файл
+            minio_hook.delete_objects(
+                bucket=BUCKET_NAME,
+                keys=[xlsx_file]
+            )
+
+            logging.info("Original file deleted")
 
     except Exception as e:
         raise AirflowException(f"File processing failed: {str(e)}")
@@ -86,9 +114,12 @@ with DAG(
         wildcard_match=True,
     )
 
+    start = PythonOperator(task_id='start', python_callable=lambda: print("Task created for execution passport blacklist"))
+    end = PythonOperator(task_id='end', python_callable=lambda: print("Execution completed passport blacklist"))
+
     process_new_file = PythonOperator(
         task_id='process_file',
         python_callable=process_file
     )
 
-    check_for_new_files >> process_new_file
+    start >> check_for_new_files >> process_new_file >> end
