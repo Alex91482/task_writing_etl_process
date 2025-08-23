@@ -17,15 +17,20 @@ class MinioService:
         self.minio_conn_id = minio_conn_id
         self.postgres_conn_id = postgres_conn_id
 
-    def process_file_general_xlsx(self, bucket_name: str, bucket_name_archive: str, schema: dict) -> pd.DataFrame:
+    def process_file_general_xlsx(self, bucket_name: str, bucket_name_archive: str, schema: dict, file_format: str ='xlsx') -> pd.DataFrame:
         """
         Функция для обработки файлов
+        :param bucket_name: ключ бакета из которого нужно забрать данные
+        :param bucket_name_archive: ключ бакета в который нужно переместить обработанные данные
+        :param schema: схема данных для определения не валидных файлов
+        :param file_format: формат файла для поддержки загрузки из разных файлов
+        :return: возвращает фрейм данных полученный
         """
         try:
             minio_hook = S3Hook(aws_conn_id=self.minio_conn_id)
             files = minio_hook.list_keys(bucket_name=bucket_name)
 
-            # добавить логику на случай отсутствия схемы
+            # TODO: добавить логику на случай отсутствия схемы
             # Создаем пустой DataFrame по схеме
             empty_data = {col: [] for col in schema.keys()}
             df_reference = pd.DataFrame.from_dict(empty_data, orient='columns')
@@ -39,16 +44,23 @@ class MinioService:
             result = df_reference
             file_to_archive = []
 
-            xlsx_files = [f for f in files if f.endswith(".xlsx")]
+            xlsx_files = [f for f in files if f.endswith(f".{file_format}")]
+            logging.info(f"Total matching files found^ {len(xlsx_files)}")
+
             for xlsx_file in xlsx_files:
                 logging.info(f"Processing {xlsx_file}")
                 obj = minio_hook.get_key(bucket_name=bucket_name, key=xlsx_file)
                 file_bytes = obj.get()["Body"].read()
 
-                df = pd.read_excel(io.BytesIO(file_bytes))
+                format_handlers = {
+                    'xlsx': lambda: pd.read_excel(io.BytesIO(file_bytes)),
+                    'txt': lambda: pd.read_csv(io.BytesIO(file_bytes), sep=';')
+                }
+
+                df = format_handlers[file_format]()
 
                 if set(df.columns) != set(df_reference.columns):
-                    logging.error("Несоответствие схем")
+                    logging.error("Mismatch of schemes")
                     self.copy_and_delete(
                         minio_hook=minio_hook,
                         file_name=xlsx_file,
@@ -78,6 +90,7 @@ class MinioService:
 
     def copy_and_delete(self, minio_hook: S3Hook, file_name: str, file_name_new: str, bucket_name: str, bucket_carrying: str) -> None:
         """
+        Метод копирует файл из целевого бакета в архивный и удаляет файл из целевого бакета
         :param minio_hook: хук для минио
         :param file_name: название файла который нам прислали
         :param file_name_new: новое имя файла
@@ -123,6 +136,6 @@ class MinioService:
     def get_postgres_hook(self) -> PostgresHook:
         """
         Метод возвращает хук для работы с postgres
-        :return:
+        :return: возвращает хук для работы с postgres
         """
         return PostgresHook(postgres_conn_id=self.postgres_conn_id)

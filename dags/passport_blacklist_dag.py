@@ -36,11 +36,12 @@ def process_file_wrapper() -> None:
     """
     Обертка функция для обработки файлов
     """
-    # получили данные из inio
+    # получили данные из minio
     df = minio_service.process_file_general_xlsx(
         bucket_name=BUCKET_NAME,
         bucket_name_archive=BUCKET_ARCHIVE,
-        schema=default_schema
+        schema=default_schema,
+        file_format="xlsx"
     )
     # преобразовали данные
     df['date'] = pd.to_datetime(df['date'], format='%d.%m.%Y', errors='coerce').dt.strftime('%Y-%m-%d')

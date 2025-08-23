@@ -923,7 +923,7 @@ create index idx_passport_blacklist_passport on bank.passport_blacklist (passpor
 
 create table bank.transactions(
 	trans_id varchar(256),
-	trans_date date,
+	trans_date TIMESTAMP,
 	card_num varchar(256),
 	oper_type varchar(256),
 	amt decimal,

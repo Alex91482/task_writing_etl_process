@@ -43,8 +43,10 @@ def process_file_wrapper() -> None:
     df = minio_service.process_file_general_xlsx(
         bucket_name=BUCKET_NAME,
         bucket_name_archive=BUCKET_ARCHIVE,
-        schema=default_schema
+        schema=default_schema,
+        file_format="xlsx"
     )
+    # TODO: фрейм данных нужно разбить по датам что бы отследить историю а то грузанут за 5 дней и все считатеся в один фрейм
     # сохраняем в базон
     process_terminals_incremental(
         df_new=df,
