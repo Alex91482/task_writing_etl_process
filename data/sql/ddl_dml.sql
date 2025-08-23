@@ -902,7 +902,7 @@ create table bank.terminals(
 create table bank.passport_blacklist(
     id BIGSERIAL PRIMARY KEY,
 	passport_num varchar(256) NOT NULL,
-    received_dt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    received_dt date NOT NULL DEFAULT CURRENT_DATE,
     effective_from TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     effective_to TIMESTAMP NOT NULL DEFAULT '9999-12-31 23:59:59',
     deleted_flg BOOLEAN NOT NULL DEFAULT FALSE
@@ -918,14 +918,13 @@ create table bank.transactions(
 	oper_result varchar(256),
 	terminal varchar(256)
 );
-/*
+
 create table bank.rep_fraud(
-	id 
-	event_dt 
-	passport 
-	fio
-	phone
-	event_type 
-	report_dt 
+	id BIGSERIAL PRIMARY KEY,
+	event_dt date,
+	passport varchar(256),
+	fio varchar(256),
+	phone varchar(256),
+	event_type varchar(256),
+	report_dt date,
 );
-*/

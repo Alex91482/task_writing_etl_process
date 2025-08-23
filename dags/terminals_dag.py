@@ -10,6 +10,7 @@ POSTGRES_CONN_ID = "postgres_config"
 FILE_PATTERN = "*.xlsx"
 BUCKET_NAME = "terminals"
 BUCKET_ARCHIVE = "terminals-archive"
+TARGET_TABLE = "bank.terminals"
 
 default_args = {
     'owner': 'airflow',
@@ -17,6 +18,13 @@ default_args = {
     'start_date': datetime(2025, 8, 16),
     'retries': 3,
     'retry_delay': timedelta(minutes=5),
+}
+
+default_schema = {
+    "terminal_id": "string",
+    "terminal_type": "string",
+    "terminal_city": "string",
+    "terminal_address": "string"
 }
 
 minio_service = MinioService(
@@ -29,9 +37,10 @@ def process_file_wrapper():
     """
     Обертка функция для обработки файлов
     """
-    minio_service.process_file_general_xlsx(
+    df = minio_service.process_file_general_xlsx(
         bucket_name=BUCKET_NAME,
-        bucket_name_archive=BUCKET_ARCHIVE
+        bucket_name_archive=BUCKET_ARCHIVE,
+        schema=default_schema
     )
 
 
