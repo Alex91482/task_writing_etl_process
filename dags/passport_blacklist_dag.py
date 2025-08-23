@@ -32,7 +32,7 @@ minio_service = MinioService(
 )
 
 
-def process_file_wrapper():
+def process_file_wrapper() -> None:
     """
     Обертка функция для обработки файлов
     """

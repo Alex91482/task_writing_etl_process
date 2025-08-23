@@ -1,8 +1,6 @@
 import io
 import logging
-
 import pandas as pd
-
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.exceptions import AirflowException
@@ -115,9 +113,16 @@ class MinioService:
                 target_fields=df.columns.tolist(),
                 replace=False
             )
-            
+
             logging.info(f"Successfully saved {len(df)} rows to DB")
 
         except Exception as e:
             logging.error(f"Error saving to PostgreSQL: {str(e)}")
             raise AirflowException(f"File processing failed: {str(e)}")
+
+    def get_postgres_hook(self) -> PostgresHook:
+        """
+        Метод возвращает хук для работы с postgres
+        :return:
+        """
+        return PostgresHook(postgres_conn_id=self.postgres_conn_id)

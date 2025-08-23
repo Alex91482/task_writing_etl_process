@@ -891,12 +891,24 @@ insert into bank.clients (client_id, last_name, first_name, patronymic, date_of_
 
 
 create table bank.terminals(
-	trminal_id varchar(256),
-	trminal_type varchar(256),
-	trminal_city varchar(256),
-	trminal_address varchar(500), 
+	terminal_id varchar(256),
+	terminal_type varchar(256),
+	terminal_city varchar(256),
+	terminal_address varchar(500),
 	create_dt date,
 	update_dt date
+);
+
+CREATE TABLE bank.terminals_history (
+    history_id SERIAL PRIMARY KEY,
+    terminal_id VARCHAR,
+    terminal_type varchar(256),
+	terminal_city varchar(256),
+	terminal_address varchar(500),
+    valid_from TIMESTAMP NOT NULL,
+    valid_to TIMESTAMP NOT NULL DEFAULT '9999-12-31 23:59:59',
+    operation_type VARCHAR(3) CHECK (operation_type IN ('INS', 'UP', 'DEL')),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 create table bank.passport_blacklist(

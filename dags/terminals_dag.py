@@ -1,7 +1,9 @@
-from airflow.providers.standard.operators.python import PythonOperator
 from datetime import datetime, timedelta
+import pandas as pd
 from airflow import DAG
 from airflow.providers.amazon.aws.sensors.s3 import S3KeySensor
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.exceptions import AirflowException
 from util.minio_service import MinioService
 
 
@@ -11,6 +13,7 @@ FILE_PATTERN = "*.xlsx"
 BUCKET_NAME = "terminals"
 BUCKET_ARCHIVE = "terminals-archive"
 TARGET_TABLE = "bank.terminals"
+HISTORY_TABLE = "bank.terminals_history"
 
 default_args = {
     'owner': 'airflow',
@@ -33,7 +36,7 @@ minio_service = MinioService(
 )
 
 
-def process_file_wrapper():
+def process_file_wrapper() -> None:
     """
     Обертка функция для обработки файлов
     """
@@ -42,6 +45,139 @@ def process_file_wrapper():
         bucket_name_archive=BUCKET_ARCHIVE,
         schema=default_schema
     )
+    # сохраняем в базон
+    process_terminals_incremental(
+        df_new=df,
+        target_table=TARGET_TABLE,
+        history_table=HISTORY_TABLE
+    )
+
+
+def process_terminals_incremental(df_new, target_table: str, history_table: str) -> None:
+    """
+    Меод для сохранения данных в бд с учетом ведения исторических данных
+    :param df_new: новая партия данных для загрузки в бд
+    :param target_table: основная таблица с данными
+    :param history_table: историческая таблица
+    """
+    pg_hook = minio_service.get_postgres_hook()
+    conn = pg_hook.get_conn()
+
+    try:
+        with conn.cursor() as cursor:
+            # Получаем текущее состояние из БД
+            cursor.execute(f"SELECT * FROM {target_table}")
+            current_records = cursor.fetchall()
+            current_columns = [desc[0] for desc in cursor.description]
+            current_df = pd.DataFrame(current_records, columns=current_columns)
+
+            # Преобразуем в множества для сравнения
+            current_ids = set(current_df['terminal_id'])
+            new_ids = set(df_new['terminal_id'])
+
+            # Определяем изменения
+            deleted_ids = current_ids - new_ids  # Удаленные терминалы
+            new_terminal_ids = new_ids - current_ids  # Новые терминалы
+            existing_ids = current_ids & new_ids  # Существующие терминалы
+
+            # Обрабатываем удаленные терминалы
+            for terminal_id in deleted_ids:
+                terminal_data = current_df[current_df['terminal_id'] == terminal_id].iloc[0]
+                cursor.execute(f"""
+                                INSERT INTO {history_table} 
+                                (terminal_id, terminal_type, terminal_city, terminal_address, valid_to, operation_type)
+                                VALUES 
+                                (%s, %s, %s, %s, %s, 'DEL')
+                            """, (
+                    terminal_data['terminal_id'],
+                    terminal_data['terminal_type'],
+                    terminal_data['terminal_city'],
+                    terminal_data['terminal_address'],
+                    datetime.now()
+                ))
+                # Удаляем из основной таблицы
+                cursor.execute(f"DELETE FROM {target_table} WHERE terminal_id = %s", (terminal_id,))
+
+            # Обрабатываем новые терминалы
+            new_terminals = df_new[df_new['terminal_id'].isin(new_terminal_ids)]
+            for _, terminal in new_terminals.iterrows():
+                cursor.execute(f"""
+                                INSERT INTO {target_table} 
+                                (terminal_id, terminal_type, terminal_city, terminal_address, create_dt, update_dt)
+                                VALUES 
+                                (%s, %s, %s, %s, %s, %s)
+                            """, (
+                    terminal['terminal_id'],
+                    terminal['terminal_type'],
+                    terminal['terminal_city'],
+                    terminal['terminal_address'],
+                    datetime.now(),
+                    datetime.now()
+                ))
+
+                cursor.execute(f"""
+                                INSERT INTO {history_table} 
+                                (terminal_id, terminal_type, terminal_city, terminal_address, valid_from, operation_type)
+                                VALUES 
+                                (%s, %s, %s, %s, %s, 'INS')
+                            """, (
+                    terminal['terminal_id'],
+                    terminal['terminal_type'],
+                    terminal['terminal_city'],
+                    terminal['terminal_address'],
+                    datetime.now()
+                ))
+
+            # 6. Обрабатываем измененные терминалы
+            for terminal_id in existing_ids:
+                # TODO: перепроверить эту хренову проверку
+                current_data = current_df[current_df['terminal_id'] == terminal_id].iloc[0]
+                new_data = df_new[df_new['terminal_id'] == terminal_id].iloc[0]
+
+                # Проверяем, изменились ли данные
+                if not current_data.equals(new_data):
+                    # Закрываем предыдущую версию в истории
+                    cursor.execute(f"""
+                                    UPDATE {history_table} 
+                                    SET valid_to = %s 
+                                    WHERE terminal_id = %s AND valid_to = '9999-12-31 23:59:59'
+                                """, (datetime.now(), terminal_id))
+
+                    # Добавляем новую версию в историю
+                    cursor.execute(f"""
+                                    INSERT INTO {history_table} 
+                                    (terminal_id, terminal_type, terminal_city, terminal_address, valid_from, operation_type)
+                                    VALUES 
+                                    (%s, %s, %s, %s, %s, 'UP')
+                                """, (
+                        terminal['terminal_id'],
+                        terminal['terminal_type'],
+                        terminal['terminal_city'],
+                        terminal['terminal_address'],
+                        datetime.now()
+                    ))
+
+                    # Обновляем основную таблицу
+                    cursor.execute(f"""
+                                    UPDATE {target_table} 
+                                    SET terminal_type = %s, terminal_city = %s, terminal_address = %s, update_dt = %s
+                                    WHERE terminal_id = %s
+                                """, (
+                        terminal['terminal_type'],
+                        terminal['terminal_city'],
+                        terminal['terminal_address'],
+                        datetime.now(),
+                        terminal_id
+                    ))
+
+            conn.commit()
+            print(f"Processed: {len(new_terminals)} new, {len(existing_ids)} existing, {len(deleted_ids)} deleted")
+
+    except Exception as e:
+        conn.rollback()
+        raise AirflowException(f"File processing failed: {str(e)}")
+    finally:
+        conn.close()
 
 
 with DAG(
