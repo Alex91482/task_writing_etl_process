@@ -40,19 +40,30 @@ def process_file_wrapper() -> None:
     """
     Обертка функция для обработки файлов
     """
-    df = minio_service.process_file_general_xlsx(
+    data_dict = minio_service.process_file_general_xlsx(
         bucket_name=BUCKET_NAME,
         bucket_name_archive=BUCKET_ARCHIVE,
         schema=default_schema,
         file_format="xlsx"
     )
-    # TODO: фрейм данных нужно разбить по датам что бы отследить историю а то грузанут за 5 дней и все считатеся в один фрейм
-    # сохраняем в базон
-    process_terminals_incremental(
-        df_new=df,
-        target_table=TARGET_TABLE,
-        history_table=HISTORY_TABLE
-    )
+
+    if len(data_dict) == 0:
+        return
+
+    for key, df in data_dict.items():
+        # сохраняем в базон
+        process_terminals_incremental(
+            df_new=df,
+            target_table=TARGET_TABLE,
+            history_table=HISTORY_TABLE
+        )
+        # сохраняем метаданные
+        prefix, file_date = minio_service.parse_filename_regex(filename=key)
+        minio_service.save_to_postgres_metadata(
+            file_create_dt=file_date,
+            file_name=key,
+            category_type=prefix
+        )
 
 
 def process_terminals_incremental(df_new, target_table: str, history_table: str) -> None:

@@ -37,21 +37,32 @@ def process_file_wrapper() -> None:
     Обертка функция для обработки файлов
     """
     # получили данные из minio
-    df = minio_service.process_file_general_xlsx(
+    data_dict = minio_service.process_file_general_xlsx(
         bucket_name=BUCKET_NAME,
         bucket_name_archive=BUCKET_ARCHIVE,
         schema=default_schema,
         file_format="xlsx"
     )
-    # преобразовали данные
-    df['date'] = pd.to_datetime(df['date'], format='%d.%m.%Y', errors='coerce').dt.strftime('%Y-%m-%d')
-    df['passport'] = df['passport'].str.replace(' ', '')
-    df = df.rename(columns={
-        "passport": "passport_num",
-        "date": "received_dt"
-    })
-    # сохранение данных в базон
-    minio_service.save_to_postgres(df=df, target_table=TARGET_TABLE)
+    if len(data_dict) == 0:
+        return
+
+    for key, df in data_dict.items():
+        # преобразовали данные
+        df['date'] = pd.to_datetime(df['date'], format='%d.%m.%Y', errors='coerce').dt.strftime('%Y-%m-%d')
+        df['passport'] = df['passport'].str.replace(' ', '')
+        df = df.rename(columns={
+            "passport": "passport_num",
+            "date": "received_dt"
+        })
+        # сохранение данных в базон
+        minio_service.save_to_postgres(df=df, target_table=TARGET_TABLE)
+        # сохраняем метаданные
+        prefix, file_date = minio_service.parse_filename_regex(filename=key)
+        minio_service.save_to_postgres_metadata(
+            file_create_dt=file_date,
+            file_name=key,
+            category_type=prefix
+        )
 
 
 with DAG(

@@ -931,6 +931,14 @@ create table bank.transactions(
 	terminal varchar(256)
 );
 
+create table bank.meta_data_file(
+    id BIGSERIAL PRIMARY KEY,
+    file_create_dt date,
+    process_dt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    file_name varchar(256),
+    category_type varchar(20) CHECK (category_type IN ('transactions', 'passport_blacklist', 'terminals'))
+);
+
 create table bank.rep_fraud(
 	id BIGSERIAL PRIMARY KEY,
 	event_dt date,

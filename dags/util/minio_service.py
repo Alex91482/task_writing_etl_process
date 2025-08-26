@@ -1,6 +1,8 @@
 import io
+import re
 import logging
 import pandas as pd
+from datetime import datetime
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.exceptions import AirflowException
@@ -17,7 +19,7 @@ class MinioService:
         self.minio_conn_id = minio_conn_id
         self.postgres_conn_id = postgres_conn_id
 
-    def process_file_general_xlsx(self, bucket_name: str, bucket_name_archive: str, schema: dict, file_format: str ='xlsx') -> pd.DataFrame:
+    def process_file_general_xlsx(self, bucket_name: str, bucket_name_archive: str, schema: dict, file_format: str ='xlsx') -> dict:
         """
         Функция для обработки файлов
         :param bucket_name: ключ бакета из которого нужно забрать данные
@@ -39,9 +41,9 @@ class MinioService:
 
             if not files:
                 logging.info(f"No files found in {bucket_name} bucket.")
-                return df_reference
+                return dict()
 
-            result = df_reference
+            result = dict()
             file_to_archive = []
 
             xlsx_files = [f for f in files if f.endswith(f".{file_format}")]
@@ -70,7 +72,7 @@ class MinioService:
                     )
 
                 else:
-                    result = pd.concat([result, df])
+                    result[xlsx_file] = df
                     file_to_archive.append(xlsx_file)
 
             for archive_file in file_to_archive:
@@ -111,7 +113,7 @@ class MinioService:
         )
         logging.info("Original file deleted")
 
-    def save_to_postgres(self, df: pd.DataFrame, target_table: str):
+    def save_to_postgres(self, df: pd.DataFrame, target_table: str) -> None:
         """
         Метод отвечающий за сохранение данных в postgres
         :param df: фрейм данных с паспортами
@@ -133,9 +135,64 @@ class MinioService:
             logging.error(f"Error saving to PostgreSQL: {str(e)}")
             raise AirflowException(f"File processing failed: {str(e)}")
 
+    def save_to_postgres_metadata(self, file_create_dt: str, file_name: str, category_type: str) -> None:
+        """
+        Метод сохранения метаданных файла
+        :param file_create_dt:
+        :param file_name:
+        :param category_type:
+        :return:
+        """
+        valid_categories = ['transactions', 'passport_blacklist', 'terminals']
+        if category_type not in valid_categories:
+            raise ValueError(f"Invalid category_type: {category_type}. Must be one of {valid_categories}")
+
+        pg_hook = PostgresHook(postgres_conn_id=self.postgres_conn_id)
+        try:
+            pg_hook.run(
+                sql="""
+                        INSERT INTO bank.meta_data_file 
+                        (file_create_dt, file_name, category_type) 
+                        VALUES 
+                        (%s, %s, %s)
+                    """,
+                parameters=(file_create_dt, file_name, category_type)
+            )
+
+            logging.info(f"Metadata saved for file: {file_name} (category: {category_type})")
+
+        except Exception as e:
+            logging.error(f"Error saving metadata: {str(e)}")
+            raise AirflowException(f"Save metadata failed: {str(e)}")
+
     def get_postgres_hook(self) -> PostgresHook:
         """
         Метод возвращает хук для работы с postgres
         :return: возвращает хук для работы с postgres
         """
         return PostgresHook(postgres_conn_id=self.postgres_conn_id)
+
+    def parse_filename_regex(self, filename: str) -> tuple:
+        """
+        Метод для получения именования отчета и даты отчета
+        :param filename: имя отчета полученного из minio
+        :return:
+        """
+        pattern = r'(\d{8})\.\w+$'
+        match = re.search(pattern, filename)
+
+        if match:
+            date_part = match.group(1)
+            # Преобразуем дату
+            date_obj = datetime.strptime(date_part, '%d%m%Y')
+            formatted_date = date_obj.strftime('%Y-%m-%d')
+
+            # Извлекаем базовое имя
+            base_name = filename[:match.start()]
+            if base_name.endswith('_'):
+                base_name = base_name[:-1]
+
+            return base_name, formatted_date
+        else:
+            # TODO: магическая дата
+            return "prefix not recognized", '1999-01-01'

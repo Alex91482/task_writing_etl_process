@@ -42,21 +42,32 @@ def process_file_wrapper() -> None:
     Обертка функция для обработки файлов
     """
     # получили данные из minio
-    df = minio_service.process_file_general_xlsx(
+    data_dict = minio_service.process_file_general_xlsx(
         bucket_name=BUCKET_NAME,
         bucket_name_archive=BUCKET_ARCHIVE,
         schema=default_schema,
         file_format="txt"
     )
-    # преобразовали данные
-    df['amount'] = pd.to_numeric(df['amount'].str.replace(',', '.'), errors='coerce')
-    df = df.rename(columns={
-        "transaction_id": "trans_id",
-        "transaction_date": "trans_date",
-        "amount": "amt"
-    })
-    # сохранение данных в базон
-    minio_service.save_to_postgres(df=df, target_table=TARGET_TABLE)
+    if len(data_dict) == 0:
+        return
+
+    for key, df in data_dict.items():
+        # преобразовали данные
+        df['amount'] = pd.to_numeric(df['amount'].str.replace(',', '.'), errors='coerce')
+        df = df.rename(columns={
+            "transaction_id": "trans_id",
+            "transaction_date": "trans_date",
+            "amount": "amt"
+        })
+        # сохранение данных в базон
+        minio_service.save_to_postgres(df=df, target_table=TARGET_TABLE)
+        # сохраняем метаданные
+        prefix, file_date = minio_service.parse_filename_regex(filename=key)
+        minio_service.save_to_postgres_metadata(
+            file_create_dt=file_date,
+            file_name=key,
+            category_type=prefix
+        )
 
 
 with DAG(
