@@ -51,14 +51,15 @@ def process_file_wrapper() -> None:
         return
 
     for key, df in data_dict.items():
+        prefix, file_date = minio_service.parse_filename_regex(filename=key)
         # сохраняем в базон
         process_terminals_incremental(
             df_new=df,
             target_table=TARGET_TABLE,
-            history_table=HISTORY_TABLE
+            history_table=HISTORY_TABLE,
+            date_receipt_values=file_date
         )
         # сохраняем метаданные
-        prefix, file_date = minio_service.parse_filename_regex(filename=key)
         minio_service.save_to_postgres_metadata(
             file_create_dt=file_date,
             file_name=key,
@@ -66,12 +67,13 @@ def process_file_wrapper() -> None:
         )
 
 
-def process_terminals_incremental(df_new, target_table: str, history_table: str) -> None:
+def process_terminals_incremental(df_new, target_table: str, history_table: str, date_receipt_values: str) -> None:
     """
     Меод для сохранения данных в бд с учетом ведения исторических данных
     :param df_new: новая партия данных для загрузки в бд
     :param target_table: основная таблица с данными
     :param history_table: историческая таблица
+    :param date_receipt_values: дата составления списка данных
     """
     pg_hook = minio_service.get_postgres_hook()
     conn = pg_hook.get_conn()
@@ -98,15 +100,16 @@ def process_terminals_incremental(df_new, target_table: str, history_table: str)
                 terminal_data = current_df[current_df['terminal_id'] == terminal_id].iloc[0]
                 cursor.execute(f"""
                                 INSERT INTO {history_table} 
-                                (terminal_id, terminal_type, terminal_city, terminal_address, valid_to, operation_type)
+                                (terminal_id, terminal_type, terminal_city, terminal_address, valid_to, operation_type, date_receipt_values)
                                 VALUES 
-                                (%s, %s, %s, %s, %s, 'DEL')
+                                (%s, %s, %s, %s, %s, 'DEL', %s)
                             """, (
                     terminal_data['terminal_id'],
                     terminal_data['terminal_type'],
                     terminal_data['terminal_city'],
                     terminal_data['terminal_address'],
-                    datetime.now()
+                    date_receipt_values,
+                    date_receipt_values
                 ))
                 # Удаляем из основной таблицы
                 cursor.execute(f"DELETE FROM {target_table} WHERE terminal_id = %s", (terminal_id,))
@@ -116,29 +119,31 @@ def process_terminals_incremental(df_new, target_table: str, history_table: str)
             for _, terminal in new_terminals.iterrows():
                 cursor.execute(f"""
                                 INSERT INTO {target_table} 
-                                (terminal_id, terminal_type, terminal_city, terminal_address, create_dt, update_dt)
+                                (terminal_id, terminal_type, terminal_city, terminal_address, create_dt, update_dt, date_receipt_values)
                                 VALUES 
-                                (%s, %s, %s, %s, %s, %s)
+                                (%s, %s, %s, %s, %s, %s, %s)
                             """, (
                     terminal['terminal_id'],
                     terminal['terminal_type'],
                     terminal['terminal_city'],
                     terminal['terminal_address'],
                     datetime.now(),
-                    datetime.now()
+                    datetime.now(),
+                    date_receipt_values
                 ))
 
                 cursor.execute(f"""
                                 INSERT INTO {history_table} 
-                                (terminal_id, terminal_type, terminal_city, terminal_address, valid_from, operation_type)
+                                (terminal_id, terminal_type, terminal_city, terminal_address, valid_from, operation_type, date_receipt_values)
                                 VALUES 
-                                (%s, %s, %s, %s, %s, 'INS')
+                                (%s, %s, %s, %s, %s, 'INS', %s)
                             """, (
                     terminal['terminal_id'],
                     terminal['terminal_type'],
                     terminal['terminal_city'],
                     terminal['terminal_address'],
-                    datetime.now()
+                    date_receipt_values,
+                    date_receipt_values
                 ))
 
             # 6. Обрабатываем измененные терминалы
@@ -159,15 +164,16 @@ def process_terminals_incremental(df_new, target_table: str, history_table: str)
                     # Добавляем новую версию в историю
                     cursor.execute(f"""
                                     INSERT INTO {history_table} 
-                                    (terminal_id, terminal_type, terminal_city, terminal_address, valid_from, operation_type)
+                                    (terminal_id, terminal_type, terminal_city, terminal_address, operation_type, valid_from, date_receipt_values)
                                     VALUES 
-                                    (%s, %s, %s, %s, %s, 'UP')
+                                    (%s, %s, %s, %s, 'UP', %s, %s)
                                 """, (
-                        terminal['terminal_id'],
-                        terminal['terminal_type'],
-                        terminal['terminal_city'],
-                        terminal['terminal_address'],
-                        datetime.now()
+                        new_data['terminal_id'],
+                        new_data['terminal_type'],
+                        new_data['terminal_city'],
+                        new_data['terminal_address'],
+                        current_data['date_receipt_values'],
+                        date_receipt_values
                     ))
 
                     # Обновляем основную таблицу
@@ -176,9 +182,9 @@ def process_terminals_incremental(df_new, target_table: str, history_table: str)
                                     SET terminal_type = %s, terminal_city = %s, terminal_address = %s, update_dt = %s
                                     WHERE terminal_id = %s
                                 """, (
-                        terminal['terminal_type'],
-                        terminal['terminal_city'],
-                        terminal['terminal_address'],
+                        new_data['terminal_type'],
+                        new_data['terminal_city'],
+                        new_data['terminal_address'],
                         datetime.now(),
                         terminal_id
                     ))

@@ -896,7 +896,8 @@ create table bank.terminals(
 	terminal_city varchar(256),
 	terminal_address varchar(500),
 	create_dt date,
-	update_dt date
+	update_dt date,
+	date_receipt_values
 );
 
 CREATE TABLE bank.terminals_history (
@@ -905,10 +906,11 @@ CREATE TABLE bank.terminals_history (
     terminal_type varchar(256),
 	terminal_city varchar(256),
 	terminal_address varchar(500),
-    valid_from TIMESTAMP NOT NULL,
+    valid_from TIMESTAMP,
     valid_to TIMESTAMP NOT NULL DEFAULT '9999-12-31 23:59:59',
     operation_type VARCHAR(3) CHECK (operation_type IN ('INS', 'UP', 'DEL')),
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	date_receipt_values date
 );
 
 create table bank.passport_blacklist(
@@ -946,5 +948,5 @@ create table bank.rep_fraud(
 	fio varchar(256),
 	phone varchar(256),
 	event_type varchar(256),
-	report_dt date,
+	report_dt date
 );
