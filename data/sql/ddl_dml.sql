@@ -948,5 +948,6 @@ create table bank.rep_fraud(
 	fio varchar(256),
 	phone varchar(256),
 	event_type varchar(256),
-	report_dt date
+	report_dt date,
+	report_period date
 );
