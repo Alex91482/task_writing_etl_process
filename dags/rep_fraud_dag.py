@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import calendar
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
@@ -32,6 +32,9 @@ def create_report() -> None:
             ;
         """
     max_report_date = hook.get_first(sql=sql1)
+    print(f'max_report_date: {str(max_report_date)}')
+    if None in max_report_date:
+        max_report_date = (date.min,)
 
     sql2 = f"""
         select distinct t.file_create_dt
@@ -45,7 +48,8 @@ def create_report() -> None:
         where t.count_files >= 3
         ;
     """
-    result_date = hook.get_records(sql=sql2, parameters=(max_report_date[0]))
+    result_date = hook.get_records(sql=sql2, parameters=(max_report_date[0],))
+    print(f'result date: {str(result_date)}')
 
     sql3 = f"""
             insert into bank.rep_fraud (event_dt, passport, fio, phone, event_type, report_dt, report_period)
@@ -176,27 +180,25 @@ def create_report() -> None:
                 ;
         """
 
-    for actual_date in result_date:
-        input_date = datetime.strptime(actual_date, '%Y-%m-%d').date()
+    for date_tuple in result_date:
+        input_date = date_tuple[0]
+        #input_date = datetime.strptime(actual_date, '%Y-%m-%d').date()
         # Дата начала месяца (для паспортов)
         beginning_month = input_date.replace(day=1)
         # Дата конца месяца (для паспортов)
         last_day = calendar.monthrange(input_date.year, input_date.month)[1]
         end_month = input_date.replace(day=last_day)
 
-        hook.run(sql=sql3, parameters=(actual_date, actual_date, beginning_month, end_month, actual_date))
+        hook.run(sql=sql3, parameters=(input_date, input_date, beginning_month, end_month, input_date))
 
     logging.info("Create report success")
-
-
-def process_report_wrapper():
-    pass
 
 
 with DAG(
     'report_processing',
     default_args=default_args,
-    schedule='@once',
+    schedule='0 7 * * *',
+    max_active_runs=3,
     catchup=False,
     tags={'report', 'processing'},
 ) as dag:
@@ -206,7 +208,7 @@ with DAG(
 
     process_report = PythonOperator(
         task_id='process_report',
-        python_callable=process_report_wrapper
+        python_callable=create_report
     )
 
     start >> process_report >> end

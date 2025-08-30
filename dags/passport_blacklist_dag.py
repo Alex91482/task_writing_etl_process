@@ -68,7 +68,8 @@ def process_file_wrapper() -> None:
 with DAG(
     'passport_minio_file_processing',
     default_args=default_args,
-    schedule='@once',
+    schedule='30 6 * * *',
+    max_active_runs=3,
     catchup=False,
     tags={'minio', 'processing'},
 ) as dag:
@@ -79,8 +80,9 @@ with DAG(
         bucket_name=BUCKET_NAME,
         aws_conn_id=MINIO_CONN_ID,
         poke_interval=60,  # Проверка каждые 60 секунд
-        timeout=3600,  # Таймаут 1 час
-        mode='poke',
+        timeout=43200,  # Таймаут 12 часов
+        mode='reschedule',
+        soft_fail=True,
         wildcard_match=True,
     )
 
