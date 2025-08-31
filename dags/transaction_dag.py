@@ -15,7 +15,8 @@ TARGET_TABLE = "bank.dwh_fact_transactions"
 
 default_args = {
     'owner': 'airflow',
-    'depends_on_past': False,
+    'depends_on_past': True,
+    'wait_for_downstream': True,
     'start_date': datetime(2025, 8, 16),
     'retries': 3,
     'retry_delay': timedelta(minutes=5),
