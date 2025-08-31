@@ -921,6 +921,17 @@ create table bank.dwh_fact_passport_blacklist (
     effective_to TIMESTAMP NOT NULL DEFAULT '9999-12-31 23:59:59',
     deleted_flg BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+create table bank.dwh_fact_passport_blacklist_hist (
+    history_id BIGSERIAL PRIMARY KEY,
+	passport_num varchar(256) NOT NULL,
+    received_dt date NOT NULL DEFAULT CURRENT_DATE,
+    valid_from TIMESTAMP,
+    valid_to TIMESTAMP NOT NULL DEFAULT '9999-12-31 23:59:59',
+    operation_type VARCHAR(3) CHECK (operation_type IN ('INS', 'UP', 'DEL')),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 create index idx_passport_blacklist_passport on bank.dwh_fact_passport_blacklist (passport_num);
 
 create table bank.dwh_fact_transactions (

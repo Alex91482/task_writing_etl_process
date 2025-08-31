@@ -11,7 +11,6 @@ POSTGRES_CONN_ID = "postgres_config"
 
 default_args = {
     'owner': 'airflow',
-    'depends_on_past': True,
     'wait_for_downstream': True,
     'start_date': datetime(2025, 8, 16),
     'retries': 3,
@@ -183,7 +182,6 @@ def create_report() -> None:
 
     for date_tuple in result_date:
         input_date = date_tuple[0]
-        #input_date = datetime.strptime(actual_date, '%Y-%m-%d').date()
         # Дата начала месяца (для паспортов)
         beginning_month = input_date.replace(day=1)
         # Дата конца месяца (для паспортов)
