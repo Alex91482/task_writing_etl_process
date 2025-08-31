@@ -897,7 +897,7 @@ create table bank.terminals(
 	terminal_address varchar(500),
 	create_dt date,
 	update_dt date,
-	date_receipt_values
+	date_receipt_values date
 );
 
 CREATE TABLE bank.terminals_history (

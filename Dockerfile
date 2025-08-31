@@ -14,4 +14,6 @@ USER airflow
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && \
     rm /tmp/requirements.txt
 
+COPY --chown=airflow:root postgres_con.json minio_con.json /opt/airflow/
+
 WORKDIR /opt/airflow
