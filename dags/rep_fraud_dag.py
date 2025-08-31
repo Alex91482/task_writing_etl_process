@@ -58,19 +58,19 @@ def create_report() -> None:
                     select t.terminal_id as terminal_id
                         , t.terminal_type as terminal_type
                         , t.terminal_city as terminal_city
-                    from bank.terminals_history t 
+                    from bank.dwh_dmi_terminals_hist t 
                     where t.date_receipt_values = %s
                         and t.operation_type != 'DEL'
                 ),
                 actual_transaction as (
                     select *
-                    from bank.transactions t 
+                    from bank.dwh_fact_transactions t 
                     where date(t.trans_date) = %s
                 ),
                 actual_blacklist_passport as (
                     select *
-                    from bank.passport_blacklist p 
-                    where p.received_dt between %s and %s
+                    from bank.dwh_fact_passport_blacklist p 
+                    where p.received_dt between %s and %s and p.deleted_flg = false
                 ),
                 expired_or_blocked_passport as (
                     select 
@@ -81,9 +81,9 @@ def create_report() -> None:
                         'Просроченный/заблокированный паспорт' as event_type,
                         CURRENT_DATE as report_dt
                     from actual_transaction t
-                        inner join bank.cards cd on t.card_num = cd.card_num
-                        inner join  bank.accounts a on cd.account = a.account
-                        inner join  bank.clients c on a.client = c.client_id
+                        inner join bank.dwh_dim_cards cd on t.card_num = cd.card_num
+                        inner join  bank.dwh_dmi_accounts a on cd.account = a.account
+                        inner join  bank.dwh_dmi_clients c on a.client = c.client_id
                         left join actual_blacklist_passport bp on c.passport_num = bp.passport_num
                     where t.oper_result = 'SUCCESS' 
                         and (c.passport_valid_to < t.trans_date 
@@ -99,9 +99,9 @@ def create_report() -> None:
                         'Недействующий договор' as event_type,
                         CURRENT_DATE as report_dt
                     from actual_transaction t
-                        inner join bank.cards cd on t.card_num = cd.card_num
-                        inner join bank.accounts a on cd.account = a.account
-                        inner join bank.clients c on a.client = c.client_id
+                        inner join bank.dwh_dim_cards cd on t.card_num = cd.card_num
+                        inner join bank.dwh_dmi_accounts a on cd.account = a.account
+                        inner join bank.dwh_dmi_clients c on a.client = c.client_id
                     where t.oper_result = 'SUCCESS' and  a.valid_to < t.trans_date
                 ),
                 operations_in_different_cities as (
@@ -120,9 +120,9 @@ def create_report() -> None:
                         from actual_transaction t
                             inner join actual_terminal th on t.terminal = th.terminal_id
                     ) t
-                        inner join bank.cards cd on t.card_num = cd.card_num
-                        inner join bank.accounts a on cd.account = a.account
-                        inner join bank.clients c on a.client = c.client_id
+                        inner join bank.dwh_dim_cards cd on t.card_num = cd.card_num
+                        inner join bank.dwh_dmi_accounts a on cd.account = a.account
+                        inner join bank.dwh_dmi_clients c on a.client = c.client_id
                     where t.prev_city is not null
                         and t.terminal_city <> t.prev_city
                         and t.trans_date <= t.prev_date + INTERVAL '1 hour'
@@ -148,9 +148,9 @@ def create_report() -> None:
                         from actual_transaction at
                         where oper_result in ('SUCCESS', 'REJECT')
                     ) t
-                        inner join bank.cards cd on t.card_num = cd.card_num
-                        inner join bank.accounts a on cd.account = a.account
-                        inner join bank.clients c on a.client = c.client_id
+                        inner join bank.dwh_dim_cards cd on t.card_num = cd.card_num
+                        inner join bank.dwh_dmi_accounts a on cd.account = a.account
+                        inner join bank.dwh_dmi_clients c on a.client = c.client_id
                     where oper_result = 'SUCCESS'
                         and prev_result = 'REJECT'
                         and prev_result2 = 'REJECT'

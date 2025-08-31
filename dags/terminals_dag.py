@@ -12,8 +12,8 @@ POSTGRES_CONN_ID = "postgres_config"
 FILE_PATTERN = "*.xlsx"
 BUCKET_NAME = "terminals"
 BUCKET_ARCHIVE = "terminals-archive"
-TARGET_TABLE = "bank.terminals"
-HISTORY_TABLE = "bank.terminals_history"
+TARGET_TABLE = "bank.dwh_dmi_terminals"
+HISTORY_TABLE = "bank.dwh_dmi_terminals_hist"
 
 default_args = {
     'owner': 'airflow',

@@ -11,7 +11,7 @@ POSTGRES_CONN_ID = "postgres_config"
 FILE_PATTERN = "*.xlsx"
 BUCKET_NAME = "passport-blacklist"
 BUCKET_ARCHIVE = "passport-blacklist-archive"
-TARGET_TABLE = "bank.passport_blacklist"
+TARGET_TABLE = "bank.dwh_fact_passport_blacklist"
 
 default_args = {
     'owner': 'airflow',

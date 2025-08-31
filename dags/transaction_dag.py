@@ -11,7 +11,7 @@ POSTGRES_CONN_ID = "postgres_config"
 FILE_PATTERN = "*.txt"
 BUCKET_NAME = "transaction"
 BUCKET_ARCHIVE = "transaction-archive"
-TARGET_TABLE = "bank.transactions"
+TARGET_TABLE = "bank.dwh_fact_transactions"
 
 default_args = {
     'owner': 'airflow',
