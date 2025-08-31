@@ -1,23 +1,5 @@
 # Пример построения ETL с инкрементальной загрузкой
 
-- Запуск сборки приложения
-```commandline
-docker-compose up -d
-```
-
-При запуске выполняется скрипт ./data/sql/ddl_dml.sql
-И дополняются зависимости из файла requirements.txt
-
-- Airflow (логин: admin, пароль: admin)
-```
-http://localhost:8080
-```
-
-- MinIo (логин: admin, пароль: your_strong_password)
-```
-http://localhost:9001
-```
-
 ## Описание задачи.
 Разработать ETL процесс, получающий ежедневную выгрузку данных (предоставляется за 3 дня), загружающий ее в хранилище 
 данных и ежедневно строящий отчет.
@@ -153,3 +135,33 @@ AIRFLOWCELERYRESULT_BACKEND=db+postgresql://airflow:airflow@postgres:5432/airflo
 AIRFLOWCOREFERNET_KEY=$(openssl rand -base64 32)
 AIRFLOWCORELOAD_EXAMPLES=False
 ```
+## Запуск приложения
+
+- Запуск сборки приложения
+```commandline
+docker-compose up -d
+```
+
+При запуске выполняется скрипт ./data/sql/ddl_dml.sql
+И дополняются зависимости из файла requirements.txt
+
+- Airflow (логин: admin, пароль: admin)
+```
+http://localhost:8080
+```
+
+- MinIo (логин: admin, пароль: your_strong_password)
+```
+http://localhost:9001
+```
+
+После того как приложение будет развернуто и все компоненты инициализированны
+нужно перейти в веб интерфейс minio для загрузки файлов из папки data.  
+В веб интерфейсе airflow в поиске по тегам (Filter by tag) вводим minio и report.
+Будет представлено 4 дага:
+- **passport_minio_file_processing** загрузка данных о паспортах из минио
+- **terminal_minio_file_processing** загрузка данных о терминалах из минио
+- **transaction_minio_file_processing** загрузка данных о транзакциях из минио
+- **report_processing формирование** отчета о мошеничестве на основании имеющихся данных
+
+Даги запускаются по расписанию в 6:30 за исключением формирование отчета он запускается в 7:00
