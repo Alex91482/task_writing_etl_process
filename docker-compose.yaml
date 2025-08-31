@@ -59,17 +59,43 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - ./init_buckets.sh:/docker-entrypoint-initdb.d/init_buckets.sh
       - minio-data:/var/lib/minio/data/
     environment:
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=your_strong_password
     command: server /data --console-address ":9001"
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhoct:9000/minio/health/live" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 20s
       retries: 3
+
+  minio-init:
+    image: quay.io/minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=your_strong_password
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set minio http://minio:9000 admin your_strong_password;
+      mc mb minio/passport-blacklist || true;
+      mc mb minio/terminals || true;
+      mc mb minio/transaction || true;
+      mc mb minio/passport-blacklist-archive || true;
+      mc mb minio/terminals-archive || true;
+      mc mb minio/transaction-archive || true;
+      mc anonymous set download minio/passport-blacklist;
+      mc anonymous set download minio/terminals;
+      mc anonymous set download minio/transaction;
+      mc anonymous set download minio/passport-blacklist-archive;
+      mc anonymous set download minio/terminals-archive;
+      mc anonymous set download minio/transaction-archive;
+      echo 'Инициализация завершена';
+      "
 
   redis:
     image: redis:7.2-bookworm
