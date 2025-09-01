@@ -88,12 +88,14 @@ services:
       mc mb minio/passport-blacklist-archive || true;
       mc mb minio/terminals-archive || true;
       mc mb minio/transaction-archive || true;
+      mc mb minio/damaged || true;
       mc anonymous set download minio/passport-blacklist;
       mc anonymous set download minio/terminals;
       mc anonymous set download minio/transaction;
       mc anonymous set download minio/passport-blacklist-archive;
       mc anonymous set download minio/terminals-archive;
       mc anonymous set download minio/transaction-archive;
+      mc anonymous set download minio/damaged;
       echo 'Инициализация завершена';
       "
 
